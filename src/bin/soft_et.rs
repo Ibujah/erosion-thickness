@@ -5,7 +5,7 @@ use env_logger;
 
 fn main() -> std::io::Result<()> {
     let dist_max = 0.005;
-    let subdiv_max = 20;
+    let subdiv_max = 1;
     let mut skeleton = Skeleton::new();
 
     env_logger::init();
