@@ -16,6 +16,7 @@ pub struct Vertex {
     time: BurnTime,
     burned: bool,
     boundary: bool,
+    kink_point: bool,
     prime_sector: Option<usize>,
 
     sector: Vec<Sector>,
@@ -32,6 +33,7 @@ impl Vertex {
             time: BurnTime::Infinity,
             burned: false,
             boundary: false,
+            kink_point: false,
             prime_sector: None,
             sector: Vec::new(),
         }
@@ -94,6 +96,10 @@ impl Vertex {
         self.boundary
     }
 
+    pub fn is_singular(&self) -> bool {
+        self.sector.len() > 2
+    }
+
     pub fn sectors(&mut self) -> &mut Vec<Sector> {
         &mut self.sector
     }
@@ -102,8 +108,36 @@ impl Vertex {
         &self.sector
     }
 
+    pub fn get_intersector(&self, sec: &Vec<usize>) -> Vec<usize> {
+        let mut cpt_inter = vec![0; self.sector.len()];
+        for &ind in sec.iter() {
+            for i in 0..self.neigh.len() {
+                if self.neigh[i] == ind {
+                    for &sec in self.edge_sector[i].iter() {
+                        let sec = sec.unwrap();
+                        cpt_inter[sec] = cpt_inter[sec] + 1;
+                    }
+                }
+            }
+        }
+
+        cpt_inter
+            .iter()
+            .enumerate()
+            .filter_map(|(e, &c)| if c > 0 { Some(e) } else { None })
+            .collect()
+    }
+
     pub fn neigh(&self) -> &Vec<usize> {
         &self.neigh
+    }
+
+    pub fn get_sector_neighs(&self, ind_sec: usize) -> Vec<usize> {
+        self.sector[ind_sec]
+            .arc()
+            .iter()
+            .map(|&i| self.neigh[i])
+            .collect()
     }
 
     pub fn get_num_neigh(&self, ind_vert: usize) -> Option<usize> {

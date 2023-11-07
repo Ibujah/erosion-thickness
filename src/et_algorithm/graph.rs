@@ -192,9 +192,6 @@ impl<'a> ETGraph<'a> {
         let mut cpt = 0;
         while !q.is_empty() {
             cpt = cpt + 1;
-            // if cpt > 1962 {
-            //     break;
-            // }
             let mut v = None;
             let mut t_min = BurnTime::Infinity;
             for &ind_v in q.iter() {
@@ -215,13 +212,6 @@ impl<'a> ETGraph<'a> {
                 continue;
             }
             log::info!("step {}: q: {}, v: {}, v_time: {}", cpt, q.len(), v, v_time);
-
-            // if cpt == 1961 {
-            //     for s in 0..self.vert[v].get_sectors().len() {
-            //         let arc = self.vert[v].get_sectors()[s].arc();
-            //         log::info!("{:?}", arc);
-            //     }
-            // }
 
             if let &Some(prime_sector) = self.vert[v].prime_sector() {
                 self.vert[v].burn_sector(prime_sector);
@@ -262,6 +252,16 @@ impl<'a> ETGraph<'a> {
                                     }
                                 }
                             }
+                        }
+                    } else if self.vert[v].is_singular() && self.vert[u].is_singular() {
+                        let prime_neigh_v =
+                            self.vert[v].get_sector_neighs(self.vert[v].prime_sector().unwrap());
+                        let intersectors = self.vert[u].get_intersector(&prime_neigh_v);
+                        if !intersectors.contains(&self.vert[u].prime_sector().unwrap()) {
+                            log::info!("kink_point detected");
+
+                            // compute wake direction
+                            return;
                         }
                     }
                 }
