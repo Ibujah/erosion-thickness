@@ -1,5 +1,5 @@
-use et_rust_gpt::et_algorithm::graph::ETGraph;
-use et_rust_gpt::skeleton::skeleton::Skeleton;
+use erosion_thickness::et_algorithm::graph::ETGraph;
+use erosion_thickness::skeleton::skeleton::Skeleton;
 
 use env_logger;
 
