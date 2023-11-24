@@ -17,6 +17,8 @@ pub struct Vertex {
     burned: bool,
     boundary: bool,
     kink_point: bool,
+    on_wake: bool,
+    previous_wake_direction: Option<Vector3<f32>>,
     prime_sector: Option<usize>,
 
     sector: Vec<Sector>,
@@ -34,6 +36,8 @@ impl Vertex {
             burned: false,
             boundary: false,
             kink_point: false,
+            on_wake: false,
+            previous_wake_direction: None,
             prime_sector: None,
             sector: Vec::new(),
         }
@@ -106,6 +110,51 @@ impl Vertex {
 
     pub fn get_sectors(&self) -> &Vec<Sector> {
         &self.sector
+    }
+
+    pub fn set_kink_point(
+        &mut self,
+        direction: Vector3<f32>,
+        prime_neigh: &Vec<usize>,
+    ) -> Vec<Vec<usize>> {
+        self.kink_point = true;
+        self.previous_wake_direction = Some(direction.normalize());
+        let intersectors = self.get_intersector(&prime_neigh);
+        let mut next_candidates = Vec::new();
+        for i in 0..self.sectors().len() {
+            if i == self.prime_sector.unwrap() || intersectors.contains(&i) {
+                continue;
+            }
+            next_candidates.push(self.sector[i].arc().iter().copied().collect());
+        }
+
+        next_candidates
+    }
+
+    pub fn choose_next(&self, vecs: &Vec<Vector3<f32>>) -> (usize, Vector3<f32>) {
+        let prev_dir = self.previous_wake_direction.unwrap();
+        let next_ind = vecs
+            .iter()
+            .enumerate()
+            .map(|(e, &v)| (e, v.normalize().dot(&prev_dir)))
+            .max_by(|(_, val1), (_, val2)| val1.total_cmp(val2))
+            .map(|(idx, _)| idx)
+            .unwrap();
+        let bef_ind = if next_ind > 0 { next_ind - 1 } else { next_ind };
+        let aft_ind = if next_ind < vecs.len() - 1 {
+            next_ind + 1
+        } else {
+            next_ind
+        };
+        let normal = vecs[bef_ind].cross(&vecs[aft_ind]).normalize();
+        let new_dir = prev_dir - normal.dot(&prev_dir) * normal;
+
+        (next_ind, new_dir)
+    }
+
+    pub fn set_wake_point(&mut self, direction: Vector3<f32>) -> () {
+        self.on_wake = true;
+        self.previous_wake_direction = Some(direction);
     }
 
     pub fn get_intersector(&self, sec: &Vec<usize>) -> Vec<usize> {

@@ -72,7 +72,11 @@ impl<'a> ETGraph<'a> {
             for j in 1..nb_subdiv {
                 let prop = (j as f32) / (nb_subdiv as f32);
                 let cur_pos = (1.0 - prop) * v1 + prop * v2;
-                let cur_rad = (1.0 - prop) * r1 + prop * r2;
+                let cur_rad = if r1 < 0.0 || r2 < 0.0 {
+                    -1.0
+                } else {
+                    (1.0 - prop) * r1 + prop * r2
+                };
                 let ind = self.vert.len();
                 self.vert.push(Vertex::new(cur_pos, cur_rad));
                 vec_sub.push(ind);
@@ -181,8 +185,15 @@ impl<'a> ETGraph<'a> {
 
     pub fn erosion_thickness(&mut self) -> () {
         let mut q = HashSet::new();
+        // for i in 0..self.vert.len() {
+        //     if self.vert[i].is_boundary() {
+        //         let rad = self.vert[i].rad();
+        //         self.vert[i].set_time(rad);
+        //         q.insert(i);
+        //     }
+        // }
         for i in 0..self.vert.len() {
-            if self.vert[i].is_boundary() {
+            if self.vert[i].rad() >= 0.0 {
                 let rad = self.vert[i].rad();
                 self.vert[i].set_time(rad);
                 q.insert(i);
@@ -202,7 +213,9 @@ impl<'a> ETGraph<'a> {
             }
             let v = v.unwrap();
             q.remove(&v);
-            let v_time = if let &BurnTime::Time(t) = self.vert[v].time() {
+            let v_time = if self.vert[v].rad() >= 0.0 {
+                self.vert[v].rad()
+            } else if let &BurnTime::Time(t) = self.vert[v].time() {
                 t
             } else {
                 continue;
@@ -229,7 +242,7 @@ impl<'a> ETGraph<'a> {
                 // update all Neighbors
                 for i in 0..self.vert[v].neigh().len() {
                     let u = self.vert[v].neigh()[i];
-                    if !self.vert[u].is_burned() {
+                    if !self.vert[u].is_burned() && self.vert[u].rad() < 0.0 {
                         // detection of sector and arc of u that contains v
                         let num_neigh_v = self.vert[u].get_num_neigh(v).unwrap();
                         let vec_t = self.vert[u].attached_sectors(num_neigh_v);
@@ -253,15 +266,52 @@ impl<'a> ETGraph<'a> {
                                 }
                             }
                         }
-                    } else if self.vert[v].is_singular() && self.vert[u].is_singular() {
+                    } else if self.vert[v].is_singular() && self.vert[u].is_singular() && false {
+                        // get v neighbors on prime sector
                         let prime_neigh_v =
                             self.vert[v].get_sector_neighs(self.vert[v].prime_sector().unwrap());
-                        let intersectors = self.vert[u].get_intersector(&prime_neigh_v);
-                        if !intersectors.contains(&self.vert[u].prime_sector().unwrap()) {
+                        // get sector(s) of u intersecting v prime sector
+                        let intersectors_u = self.vert[u].get_intersector(&prime_neigh_v);
+                        let prime_sector_u = self.vert[u].prime_sector().unwrap();
+                        if !intersectors_u.contains(&prime_sector_u) {
+                            // if prime sectors does not intersect, then there is a prime sector
+                            // switch, i.e. a kink point
                             log::info!("kink_point detected");
 
                             // compute wake direction
-                            return;
+                            // after v
+                            let prev_v = self.vert[v].prime_neighbor().unwrap();
+                            let dir_v = self.vert[v].pos() - self.vert[prev_v].pos();
+                            let prime_neigh_u = self.vert[u]
+                                .get_sector_neighs(self.vert[u].prime_sector().unwrap());
+                            let candidates_v = self.vert[v].set_kink_point(dir_v, &prime_neigh_u);
+
+                            for cv in candidates_v.iter() {
+                                let vecs = cv
+                                    .iter()
+                                    .map(|&i| self.vert[i].pos() - self.vert[v].pos())
+                                    .collect();
+                                let (ind_next, dir_next) = self.vert[v].choose_next(&vecs);
+                                self.vert[cv[ind_next]].set_wake_point(dir_next);
+                            }
+
+                            // after u
+                            let prev_u = self.vert[u].prime_neighbor().unwrap();
+                            let dir_u = self.vert[u].pos() - self.vert[prev_u].pos();
+                            let candidates_u = self.vert[u].set_kink_point(dir_u, &prime_neigh_v);
+
+                            for cv in candidates_u.iter() {
+                                let vecs = cv
+                                    .iter()
+                                    .map(|&i| self.vert[i].pos() - self.vert[u].pos())
+                                    .collect();
+                                let (ind_next, dir_next) = self.vert[u].choose_next(&vecs);
+                                self.vert[cv[ind_next]].set_wake_point(dir_next);
+                            }
+
+                            // update next points if needed
+
+                            // return;
                         }
                     }
                 }

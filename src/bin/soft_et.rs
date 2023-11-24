@@ -1,11 +1,11 @@
-use et_rust_gpt::et_algorithm::graph::ETGraph;
-use et_rust_gpt::skeleton::skeleton::Skeleton;
+use erosion_thickness::et_algorithm::graph::ETGraph;
+use erosion_thickness::skeleton::skeleton::Skeleton;
 
 use env_logger;
 
 fn main() -> std::io::Result<()> {
     let dist_max = 0.005;
-    let subdiv_max = 1;
+    let subdiv_max = 20;
     let mut skeleton = Skeleton::new();
 
     env_logger::init();
@@ -16,7 +16,9 @@ fn main() -> std::io::Result<()> {
     // skeleton.import_radii("resources/unit_radius4.rad")?;
     // skeleton.import_from_obj("resources/unit_skeleton5.obj")?;
     // skeleton.import_radii("resources/unit_radius5.rad")?;
-    skeleton.import_from_obj("resources/test_kink_point.obj")?;
+    // skeleton.import_from_obj("resources/test_kink_point.obj")?;
+    skeleton.import_from_obj("resources/test_kink_point2.obj")?;
+    skeleton.import_radii("resources/test_kink_rad2.rad")?;
 
     let mut et_graph = ETGraph::new(&skeleton, dist_max, subdiv_max);
 
