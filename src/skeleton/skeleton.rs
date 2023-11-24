@@ -70,13 +70,13 @@ impl Skeleton {
 
         for i in 0..self.vertex_coords.len() {
             let mut vertex = DefaultElement::new();
+            for (&key, &val) in self.vertex_properties[i].iter() {
+                vertex.insert(key, val);
+            }
             vertex.insert("x".to_string(), Property::Float(self.vertex_coords[i][0]));
             vertex.insert("y".to_string(), Property::Float(self.vertex_coords[i][1]));
             vertex.insert("z".to_string(), Property::Float(self.vertex_coords[i][2]));
             vertex.insert("radius".to_string(), Property::Float(self.vertex_radius[i]));
-            for (&key, &val) in self.vertex_properties[i].iter() {
-                vertex.insert(key, val);
-            }
             vertices.push(vertex);
         }
 
@@ -96,6 +96,9 @@ impl Skeleton {
 
         for i in 0..self.face_edges.len() {
             let mut face = DefaultElement::new();
+            for (&key, &val) in self.faces_properties[i].iter() {
+                face.insert(key, val);
+            }
             face.insert(
                 "vertex_indices".to_string(),
                 Property::ListUInt(
@@ -105,9 +108,6 @@ impl Skeleton {
                         .collect(),
                 ),
             );
-            for (&key, &val) in self.faces_properties[i].iter() {
-                face.insert(key, val);
-            }
             faces.push(face);
         }
 

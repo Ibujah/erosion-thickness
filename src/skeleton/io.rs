@@ -78,25 +78,21 @@ pub fn import_from_ply(file_path: &str) -> Result<()> {
 }
 
 pub fn export_to_ply(skel: &skeleton::Skeleton, file_path: &str) -> Result<()> {
-    let mut ply = {
-        let mut ply = Ply::<DefaultElement>::new();
-        ply.header.encoding = Encoding::Ascii;
-        ply.header
-            .comments
-            .push("Generated with https://github.com/Ibujah/erosion-thickness".to_string());
+    let mut ply = Ply::<DefaultElement>::new();
+    ply.header.encoding = Encoding::Ascii;
+    ply.header.comments.push(
+        "Erosion thickness generated with https://github.com/Ibujah/erosion-thickness".to_string(),
+    );
 
-        ply.header.elements.add(skel.vertex_header_element());
-        ply.header.elements.add(skel.face_header_element());
+    ply.header.elements.add(skel.vertex_header_element());
+    ply.header.elements.add(skel.face_header_element());
 
-        let vertices = skel.vertex_payload_element();
-        let faces = skel.face_payload_element();
+    ply.payload
+        .insert("vertex".to_string(), skel.vertex_payload_element());
+    ply.payload
+        .insert("face".to_string(), skel.face_payload_element());
 
-        ply.payload.insert("vertex".to_string(), vertices);
-        ply.payload.insert("face".to_string(), faces);
-
-        ply.make_consistent().unwrap();
-        ply
-    };
+    ply.make_consistent().unwrap();
 
     let mut file = File::create(file_path)?;
     let w = Writer::new();

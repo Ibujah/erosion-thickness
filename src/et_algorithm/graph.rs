@@ -1,7 +1,7 @@
 use log;
+use ndarray::ShapeBuilder;
 use std::fs::File;
 use std::io::Write;
-use std::{cmp::Ordering, collections::HashSet};
 
 use super::{burntime::BurnTime, vertex::Vertex};
 use crate::skeleton::skeleton::Skeleton;
@@ -88,36 +88,37 @@ impl<'a> ETGraph<'a> {
         let nb_faces = self.skel.get_faces().len();
 
         for i in 0..nb_faces {
-            // for &[ind_edg1, ind_edg2, ind_edg3] in faces.iter() {
-            let [ind_edg1, ind_edg2, ind_edg3] = self.skel.get_faces()[i];
-            let subdiv1: Vec<usize> = subdivs_ind[ind_edg1].clone();
-            let subdiv2: Vec<usize> =
-                if *subdivs_ind[ind_edg2].first().unwrap() == *subdiv1.last().unwrap() {
-                    subdivs_ind[ind_edg2].clone()
-                } else if *subdivs_ind[ind_edg2].last().unwrap() == *subdiv1.last().unwrap() {
-                    subdivs_ind[ind_edg2].iter().map(|&x| x).rev().collect()
-                } else if *subdivs_ind[ind_edg3].first().unwrap() == *subdiv1.last().unwrap() {
-                    subdivs_ind[ind_edg3].clone()
+            let ind_edges = self.skel.get_faces()[i];
+            let subdivs = vec![subdivs_ind[ind_edges[0]]];
+            let mut all_length_2 = true;
+            for i in 1..ind_edges.len() {
+                let ind_edge = ind_edges[i];
+                let subdiv_cur = subdivs_ind[ind_edge];
+                if subdiv_cur.len() != 2 {
+                    all_length_2 = false;
+                }
+                if *subdiv_cur.first().unwrap() == *subdivs[i - 1].last().unwrap() {
+                    subdivs.push(subdiv_cur.clone());
+                } else if *subdiv_cur.last().unwrap() == *subdivs[i - 1].last().unwrap() {
+                    subdivs.push(subdiv_cur.iter().map(|&x| x).rev().collect());
+                } else if *subdiv_cur.last().unwrap() == *subdivs[0].first().unwrap() {
+                    subdivs.insert(0, subdiv_cur.clone());
                 } else {
-                    subdivs_ind[ind_edg3].iter().map(|&x| x).rev().collect()
-                };
-            let subdiv3: Vec<usize> =
-                if *subdivs_ind[ind_edg2].last().unwrap() == *subdiv1.first().unwrap() {
-                    subdivs_ind[ind_edg2].clone()
-                } else if *subdivs_ind[ind_edg2].first().unwrap() == *subdiv1.first().unwrap() {
-                    subdivs_ind[ind_edg2].iter().map(|&x| x).rev().collect()
-                } else if *subdivs_ind[ind_edg3].last().unwrap() == *subdiv1.first().unwrap() {
-                    subdivs_ind[ind_edg3].clone()
-                } else {
-                    subdivs_ind[ind_edg3].iter().map(|&x| x).rev().collect()
-                };
-            if subdiv1.len() == 2 && subdiv2.len() == 2 && subdiv3.len() == 2 {
-                let ind_vert1 = subdiv1[0];
-                let ind_vert2 = subdiv2[0];
-                let ind_vert3 = subdiv3[0];
-                self.vert[ind_vert1].add_couple_neigh(ind_vert2, ind_vert3);
-                self.vert[ind_vert2].add_couple_neigh(ind_vert3, ind_vert1);
-                self.vert[ind_vert3].add_couple_neigh(ind_vert1, ind_vert2);
+                    subdivs.insert(0, subdiv_cur.iter().map(|&x| x).rev().collect());
+                }
+            }
+
+            if all_length_2 {
+                for i in 0..subdivs.len() {
+                    let ind_vert_i = subdivs[i][0];
+                    for j in 0..subdivs.len() - 1 {
+                        let j_prev = (i + j + subdivs.len()) % subdivs.len();
+                        let j_next = (i + j + 1) % subdivs.len();
+                        let ind_vert_prev = subdivs[j_prev][0];
+                        let ind_vert_next = subdivs[j_next][0];
+                        self.vert[ind_vert_i].add_couple_neigh(ind_vert_prev, ind_vert_next);
+                    }
+                }
             } else {
                 let mut build_subdivided = |s1: &Vec<usize>, s2: &Vec<usize>, s3: &Vec<usize>| {
                     log::debug!("build_subdivided");
@@ -176,119 +177,6 @@ impl<'a> ETGraph<'a> {
     fn build_sectors(&mut self) -> () {
         for i in 0..self.vert.len() {
             self.vert[i].compute_sectors();
-        }
-    }
-
-    pub fn erosion_thickness(&mut self) -> () {
-        let mut q = HashSet::new();
-        for i in 0..self.vert.len() {
-            if self.vert[i].is_boundary() {
-                let rad = self.vert[i].rad();
-                self.vert[i].set_time(rad);
-                q.insert(i);
-            }
-        }
-
-        let mut cpt = 0;
-        while !q.is_empty() {
-            cpt = cpt + 1;
-            // if cpt > 1962 {
-            //     break;
-            // }
-            let mut v = None;
-            let mut t_min = BurnTime::Infinity;
-            for &ind_v in q.iter() {
-                if self.vert[ind_v].time().inf_eq(&t_min) {
-                    v = Some(ind_v);
-                    t_min = *self.vert[ind_v].time();
-                }
-            }
-            let v = v.unwrap();
-            q.remove(&v);
-            let v_time = if let &BurnTime::Time(t) = self.vert[v].time() {
-                t
-            } else {
-                continue;
-            };
-
-            if self.vert[v].is_burned() {
-                continue;
-            }
-            log::info!("step {}: q: {}, v: {}, v_time: {}", cpt, q.len(), v, v_time);
-
-            // if cpt == 1961 {
-            //     for s in 0..self.vert[v].get_sectors().len() {
-            //         let arc = self.vert[v].get_sectors()[s].arc();
-            //         log::info!("{:?}", arc);
-            //     }
-            // }
-
-            if let &Some(prime_sector) = self.vert[v].prime_sector() {
-                self.vert[v].burn_sector(prime_sector);
-            }
-
-            let exposed_sectors = self.vert[v].get_exposed_sectors();
-            for ind_sec in exposed_sectors {
-                self.vert[v].burn_sector(ind_sec);
-                self.vert[v].sectors()[ind_sec].set_time(v_time);
-            }
-
-            let unburned_sectors = self.vert[v].get_unburned_sectors();
-            if unburned_sectors.is_empty() {
-                self.vert[v].burn();
-                // update all Neighbors
-                for i in 0..self.vert[v].neigh().len() {
-                    let u = self.vert[v].neigh()[i];
-                    if !self.vert[u].is_burned() {
-                        // detection of sector and arc of u that contains v
-                        let num_neigh_v = self.vert[u].get_num_neigh(v).unwrap();
-                        let vec_t = self.vert[u].attached_sectors(num_neigh_v);
-
-                        let arc_norm = (self.vert[v].pos() - self.vert[u].pos()).norm();
-                        for t in vec_t {
-                            if !self.vert[u].sectors()[t].is_burned() {
-                                // computation of new burn time for u
-                                let h = arc_norm + v_time;
-                                if BurnTime::Time(h).inf_eq(self.vert[u].sectors()[t].time()) {
-                                    // update on sector t if burntime is lower
-                                    self.vert[u].sectors()[t].set_time(h);
-                                    let ind_prime_arc =
-                                        self.vert[u].sectors()[t].get_arc(num_neigh_v).unwrap();
-                                    self.vert[u].sectors()[t].set_prime_arc(ind_prime_arc);
-                                    if BurnTime::Time(h).inf_eq(self.vert[u].time()) {
-                                        self.vert[u].set_time(h);
-                                        self.vert[u].set_prime_sector(t);
-                                        q.insert(u);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                let sec_min = unburned_sectors
-                    .into_iter()
-                    .min_by(|&s1, &s2| {
-                        let &t1 = self.vert[v].sectors()[s1].time();
-                        let &t2 = self.vert[v].sectors()[s2].time();
-                        if t1.inf_eq(&t2) {
-                            Ordering::Less
-                        } else {
-                            Ordering::Greater
-                        }
-                    })
-                    .unwrap();
-
-                if let &BurnTime::Time(t) = self.vert[v].sectors()[sec_min].time() {
-                    self.vert[v].set_prime_sector(sec_min);
-                    self.vert[v].set_time(t);
-                    q.insert(v);
-                } else {
-                    self.vert[v].reset_prime_sector();
-                    self.vert[v].reset_time();
-                    q.remove(&v);
-                }
-            }
         }
     }
 
