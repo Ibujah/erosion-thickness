@@ -1,4 +1,5 @@
+pub mod algorithm;
 mod burntime;
-pub mod graph;
+mod graph;
 mod sector;
 mod vertex;

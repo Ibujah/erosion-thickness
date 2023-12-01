@@ -1,29 +1,48 @@
-use erosion_thickness::et_algorithm::graph::ETGraph;
-use erosion_thickness::skeleton::skeleton::Skeleton;
+use anyhow::Result;
+use clap::Parser;
+use std::fs;
+
+use erosion_thickness::et_algorithm::algorithm::erosion_thickness_computation;
+use erosion_thickness::skeleton::io;
 
 use env_logger;
 
-fn main() -> std::io::Result<()> {
+#[derive(Parser)]
+struct Cli {
+    #[arg(long = "input_skel")]
+    ply_in_path: std::path::PathBuf,
+    #[arg(default_value = "0.005", long = "dist_max")]
+    dist_max: f32,
+    #[arg(default_value = "1", long = "subdiv_max")]
+    subdiv_max: usize,
+    #[arg(default_value = "./output/", long = "pathout")]
+    out_path: std::path::PathBuf,
+    #[arg(default_value = "skeleton_erosion_thickness.ply", long = "output_skel")]
+    ply_out_path: std::path::PathBuf,
+    #[arg(default_value = "erosion_path.ply", long = "output_erosion_path")]
+    ply_erosion_out_path: std::path::PathBuf,
+}
+
+fn main() -> Result<()> {
+    let args = Cli::parse();
+
+    let ply_in_path_str = args.ply_in_path.to_str().unwrap();
+    let out_path_str = args.out_path.to_str().unwrap();
+    let ply_out_path_str = args.ply_out_path.to_str().unwrap();
+    let ply_erosion_out_path_str = args.ply_erosion_out_path.to_str().unwrap();
     let dist_max = 0.005;
     let subdiv_max = 1;
-    let mut skeleton = Skeleton::new();
 
     env_logger::init();
-    // Add vertices, edges, and faces as needed
-    // skeleton.import_from_obj("resources/skeleton.obj")?;
-    // skeleton.import_radii("resources/radius.rad")?;
-    // skeleton.import_from_obj("resources/unit_skeleton4.obj")?;
-    // skeleton.import_radii("resources/unit_radius4.rad")?;
-    // skeleton.import_from_obj("resources/unit_skeleton5.obj")?;
-    // skeleton.import_radii("resources/unit_radius5.rad")?;
-    skeleton.import_from_obj("resources/test_kink_point.obj")?;
+    let mut skeleton = io::import_from_ply(ply_in_path_str)?;
+    let erosion_path = erosion_thickness_computation(&mut skeleton, dist_max, subdiv_max)?;
 
-    let mut et_graph = ETGraph::new(&skeleton, dist_max, subdiv_max);
-
-    et_graph.erosion_thickness();
-    et_graph.export_to_ply("resources/res_skel.ply")?;
-    et_graph.export_geodesics_to_ply("resources/geo_skel.ply")?;
-    // et_graph.print_state();
+    fs::create_dir_all(out_path_str)?;
+    io::export_to_ply(&skeleton, &format!("{}{}", out_path_str, ply_out_path_str))?;
+    io::export_erosion_path_to_ply(
+        &erosion_path,
+        &format!("{}{}", out_path_str, ply_erosion_out_path_str),
+    )?;
 
     Ok(())
 }
