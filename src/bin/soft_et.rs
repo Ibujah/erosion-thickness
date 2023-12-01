@@ -10,9 +10,10 @@ fn main() -> Result<()> {
 
     env_logger::init();
     let mut skeleton = io::import_from_ply("resources/skeleton.ply")?;
-    erosion_thickness_computation(&mut skeleton, dist_max, subdiv_max)?;
+    let erosion_path = erosion_thickness_computation(&mut skeleton, dist_max, subdiv_max)?;
 
     io::export_to_ply(&skeleton, "resources/skeleton_out.ply")?;
+    io::export_erosion_path_to_ply(&erosion_path, "resources/erosion_path_out.ply")?;
 
     Ok(())
 }

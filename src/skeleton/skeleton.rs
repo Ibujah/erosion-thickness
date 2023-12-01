@@ -20,7 +20,7 @@ pub struct Skeleton {
     edge_to_faces: HashMap<usize, Vec<usize>>,
 }
 
-fn property_to_propertytype(prop: &Property) -> PropertyType {
+pub(super) fn property_to_propertytype(prop: &Property) -> PropertyType {
     match prop {
         Property::Char(_) => PropertyType::Scalar(ScalarType::Char),
         Property::UChar(_) => PropertyType::Scalar(ScalarType::UChar),

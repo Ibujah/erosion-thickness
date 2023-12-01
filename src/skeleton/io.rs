@@ -8,6 +8,7 @@ use ply_rs::parser::Parser;
 use ply_rs::ply::{Addable, DefaultElement, Encoding, Ply, Property};
 use ply_rs::writer::Writer;
 
+use super::erosion_path::ErosionPath;
 use super::skeleton::Skeleton;
 
 pub fn import_from_ply(file_path: &str) -> Result<Skeleton> {
@@ -91,6 +92,31 @@ pub fn export_to_ply(skel: &Skeleton, file_path: &str) -> Result<()> {
         .insert("vertex".to_string(), skel.vertex_payload_element());
     ply.payload
         .insert("face".to_string(), skel.face_payload_element());
+
+    ply.make_consistent().unwrap();
+
+    let mut file = File::create(file_path)?;
+    let w = Writer::new();
+    w.write_ply(&mut file, &mut ply).unwrap();
+    Ok(())
+}
+
+pub fn export_erosion_path_to_ply(erosion_path: &ErosionPath, file_path: &str) -> Result<()> {
+    let mut ply = Ply::<DefaultElement>::new();
+    ply.header.encoding = Encoding::Ascii;
+    ply.header.comments.push(
+        "Erosion thickness generated with https://github.com/Ibujah/erosion-thickness".to_string(),
+    );
+
+    ply.header
+        .elements
+        .add(erosion_path.vertex_header_element());
+    ply.header.elements.add(erosion_path.edge_header_element());
+
+    ply.payload
+        .insert("vertex".to_string(), erosion_path.vertex_payload_element());
+    ply.payload
+        .insert("edge".to_string(), erosion_path.edge_payload_element());
 
     ply.make_consistent().unwrap();
 

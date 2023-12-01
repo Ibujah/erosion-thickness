@@ -3,13 +3,14 @@ use log;
 use std::{cmp::Ordering, collections::HashSet};
 
 use super::{burntime::BurnTime, graph::ETGraph, vertex::ErosionThickness};
+use crate::skeleton::erosion_path::ErosionPath;
 use crate::skeleton::skeleton::Skeleton;
 
 pub fn erosion_thickness_computation(
     skeleton: &mut Skeleton,
     dist_max: f32,
     subdiv_max: usize,
-) -> Result<()> {
+) -> Result<ErosionPath> {
     let mut et_graph = ETGraph::new(skeleton, dist_max, subdiv_max);
 
     let mut q = HashSet::new();
@@ -119,6 +120,36 @@ pub fn erosion_thickness_computation(
         }
     }
 
+    let mut erosion_path = ErosionPath::new();
+
+    let mut bt_max = 0.0;
+    for i in 0..skeleton.get_vertices().len() {
+        let bt = et_graph.get_vertices()[i].time();
+        if let &BurnTime::Time(bt) = bt {
+            if bt > bt_max {
+                bt_max = bt;
+            }
+        }
+    }
+
+    let mut prime_arcs = Vec::new();
+    for i in 0..et_graph.get_vertices().len() {
+        let v = &et_graph.get_vertices()[i];
+        if let Some(ind_prime) = v.prime_neighbor() {
+            prime_arcs.push([i, ind_prime]);
+        }
+        let bt = if let &BurnTime::Time(bt) = v.time() {
+            bt
+        } else {
+            bt_max
+        };
+        erosion_path.add_vertex(v.pos(), bt);
+    }
+    for i in 0..prime_arcs.len() {
+        erosion_path.add_edge(prime_arcs[i]);
+    }
+    erosion_path.set_vertex_color_from_property_f32("burntime")?;
+
     let mut et_max = 0.0;
     for i in 0..skeleton.get_vertices().len() {
         let et = et_graph.get_vertices()[i].erosion_thickness();
@@ -142,5 +173,5 @@ pub fn erosion_thickness_computation(
     skeleton.set_property_f32("erosion_thickness", &et_values)?;
     skeleton.set_vertex_color_from_property_f32("erosion_thickness")?;
 
-    Ok(())
+    Ok(erosion_path)
 }
