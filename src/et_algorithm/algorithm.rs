@@ -123,6 +123,7 @@ pub fn erosion_thickness_computation(
     let mut erosion_path = ErosionPath::new();
 
     let mut bt_max = 0.0;
+    let mut et_max = 0.0;
     for i in 0..skeleton.get_vertices().len() {
         let bt = et_graph.get_vertices()[i].time();
         if let &BurnTime::Time(bt) = bt {
@@ -130,9 +131,17 @@ pub fn erosion_thickness_computation(
                 bt_max = bt;
             }
         }
+        let et = et_graph.get_vertices()[i].erosion_thickness();
+        if let ErosionThickness::ET(et) = et {
+            if et > et_max {
+                et_max = et;
+            }
+        }
     }
 
+    // building erosion path structure
     let mut prime_arcs = Vec::new();
+
     for i in 0..et_graph.get_vertices().len() {
         let v = &et_graph.get_vertices()[i];
         if let Some(ind_prime) = v.prime_neighbor() {
@@ -145,21 +154,13 @@ pub fn erosion_thickness_computation(
         };
         erosion_path.add_vertex(v.pos(), bt);
     }
+
     for i in 0..prime_arcs.len() {
         erosion_path.add_edge(prime_arcs[i]);
     }
     erosion_path.set_vertex_color_from_property_f32("burntime")?;
 
-    let mut et_max = 0.0;
-    for i in 0..skeleton.get_vertices().len() {
-        let et = et_graph.get_vertices()[i].erosion_thickness();
-        if let ErosionThickness::ET(et) = et {
-            if et > et_max {
-                et_max = et;
-            }
-        }
-    }
-
+    // updating skeleton structure
     let mut et_values: Vec<f32> = Vec::new();
     for i in 0..skeleton.get_vertices().len() {
         let et = et_graph.get_vertices()[i].erosion_thickness();

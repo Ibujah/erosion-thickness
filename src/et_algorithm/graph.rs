@@ -1,8 +1,6 @@
 use log;
-use std::fs::File;
-use std::io::Write;
 
-use super::{burntime::BurnTime, vertex::Vertex};
+use super::vertex::Vertex;
 use crate::skeleton::skeleton::Skeleton;
 
 pub struct ETGraph<'a> {
@@ -150,73 +148,5 @@ impl<'a> ETGraph<'a> {
         for i in 0..self.vert.len() {
             self.vert[i].compute_sectors();
         }
-    }
-
-    pub fn export_geodesics_to_ply(&self, file_path: &str) -> std::io::Result<()> {
-        let mut prime_arcs = Vec::new();
-        for i in 0..self.vert.len() {
-            let v = &self.vert[i];
-            if let Some(ind_prime) = v.prime_neighbor() {
-                prime_arcs.push([i, ind_prime]);
-            }
-        }
-
-        let mut file = File::create(file_path)?;
-
-        writeln!(file, "ply")?;
-        writeln!(file, "format ascii 1.0")?;
-
-        writeln!(file, "element vertex {}", self.vert.len())?;
-        writeln!(file, "property float x")?;
-        writeln!(file, "property float y")?;
-        writeln!(file, "property float z")?;
-        writeln!(file, "property uchar red")?;
-        writeln!(file, "property uchar green")?;
-        writeln!(file, "property uchar blue")?;
-
-        writeln!(file, "element edge {}", prime_arcs.len())?;
-        writeln!(file, "property int vertex1")?;
-        writeln!(file, "property int vertex2")?;
-
-        writeln!(file, "end_header")?;
-
-        let mut t_min = -1.0;
-        let mut t_max = -1.0;
-        for v in self.vert.iter() {
-            if let &BurnTime::Time(t) = v.time() {
-                if t_min < 0.0 || t_min > t {
-                    t_min = t;
-                }
-                if t_max < 0.0 || t_max < t {
-                    t_max = t;
-                }
-            }
-        }
-
-        log::info!("dists: {} {}", t_min, t_max);
-
-        for v in self.vert.iter() {
-            write!(file, "{} {} {} ", v.pos()[0], v.pos()[1], v.pos()[2])?;
-            if let &BurnTime::Time(vt) = v.time() {
-                let t = (vt - t_min) / (t_max - t_min);
-                write!(
-                    file,
-                    "{} {} {} ",
-                    (t * 255.0) as u8,
-                    0,
-                    ((1.0 - t) * 255.0) as u8
-                )?;
-            } else {
-                write!(file, "{} {} {} ", 0, 0, 0)?;
-            };
-            writeln!(file, "")?;
-        }
-
-        for i in 0..prime_arcs.len() {
-            write!(file, "{} {} ", prime_arcs[i][0], prime_arcs[i][1])?;
-            writeln!(file, "")?;
-        }
-
-        Ok(())
     }
 }
