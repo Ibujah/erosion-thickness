@@ -8,15 +8,15 @@ use ply_rs::parser::Parser;
 use ply_rs::ply::{Addable, DefaultElement, Encoding, Ply, Property};
 use ply_rs::writer::Writer;
 
-use crate::skeleton::skeleton;
+use super::skeleton::Skeleton;
 
-pub fn import_from_ply(file_path: &str) -> Result<()> {
+pub fn import_from_ply(file_path: &str) -> Result<Skeleton> {
     let mut f = std::fs::File::open(file_path).unwrap();
 
     let p = Parser::<DefaultElement>::new();
     let ply = p.read_ply(&mut f)?;
 
-    let mut skel = skeleton::Skeleton::new();
+    let mut skel = Skeleton::new();
 
     // load vertices
     if !ply.payload.contains_key("vertex") {
@@ -29,22 +29,22 @@ pub fn import_from_ply(file_path: &str) -> Result<()> {
         let mut radius = None;
         let mut properties = HashMap::new();
 
-        for (key, &prop) in v.iter() {
+        for (key, prop) in v.into_iter() {
             match (key.as_ref(), prop) {
                 ("x", Property::Float(val)) => x = Some(val),
                 ("y", Property::Float(val)) => y = Some(val),
                 ("z", Property::Float(val)) => z = Some(val),
                 ("radius", Property::Float(val)) => radius = Some(val),
                 (k, p) => {
-                    properties.insert(k.to_string(), p);
+                    properties.insert(k.to_string(), p.clone());
                     ()
                 }
             }
         }
-        let x = x.ok_or(anyhow::Error::msg("No x property in vertex"))?;
-        let y = y.ok_or(anyhow::Error::msg("No y property in vertex"))?;
-        let z = z.ok_or(anyhow::Error::msg("No z property in vertex"))?;
-        let radius = radius.ok_or(anyhow::Error::msg("No radius property in vertex"))?;
+        let x = *x.ok_or(anyhow::Error::msg("No x property in vertex"))?;
+        let y = *y.ok_or(anyhow::Error::msg("No y property in vertex"))?;
+        let z = *z.ok_or(anyhow::Error::msg("No z property in vertex"))?;
+        let radius = *radius.ok_or(anyhow::Error::msg("No radius property in vertex"))?;
         skel.add_vertex(Vector3::new(x, y, z), radius, properties);
     }
 
@@ -56,28 +56,28 @@ pub fn import_from_ply(file_path: &str) -> Result<()> {
         let mut list_vertices = None;
         let mut properties = HashMap::new();
 
-        for (key, &prop) in f.iter() {
+        for (key, prop) in f.into_iter() {
             match (key.as_ref(), prop) {
-                ("vertex_indices", Property::ListUInt(val)) => {
+                ("vertex_index", Property::ListInt(val)) => {
                     list_vertices = Some(val.iter().map(|&v| usize::try_from(v).unwrap()).collect())
                 }
                 (k, p) => {
-                    properties.insert(k.to_string(), p);
+                    properties.insert(k.to_string(), p.clone());
                     ()
                 }
             }
         }
 
         let list_vertices: Vec<usize> =
-            list_vertices.ok_or(anyhow::Error::msg("No vertex_indices property in face"))?;
+            list_vertices.ok_or(anyhow::Error::msg("No vertex_index property in face"))?;
 
         skel.add_face(list_vertices, properties);
     }
 
-    Ok(())
+    Ok(skel)
 }
 
-pub fn export_to_ply(skel: &skeleton::Skeleton, file_path: &str) -> Result<()> {
+pub fn export_to_ply(skel: &Skeleton, file_path: &str) -> Result<()> {
     let mut ply = Ply::<DefaultElement>::new();
     ply.header.encoding = Encoding::Ascii;
     ply.header.comments.push(
@@ -96,6 +96,6 @@ pub fn export_to_ply(skel: &skeleton::Skeleton, file_path: &str) -> Result<()> {
 
     let mut file = File::create(file_path)?;
     let w = Writer::new();
-    let written = w.write_ply(&mut file, &mut ply).unwrap();
+    w.write_ply(&mut file, &mut ply).unwrap();
     Ok(())
 }

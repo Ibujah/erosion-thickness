@@ -1,3 +1,4 @@
+use anyhow::Result;
 use nalgebra::base::*;
 use std::collections::HashMap;
 
@@ -19,7 +20,7 @@ pub struct Skeleton {
     edge_to_faces: HashMap<usize, Vec<usize>>,
 }
 
-fn property_to_propertytype(prop: Property) -> PropertyType {
+fn property_to_propertytype(prop: &Property) -> PropertyType {
     match prop {
         Property::Char(_) => PropertyType::Scalar(ScalarType::Char),
         Property::UChar(_) => PropertyType::Scalar(ScalarType::UChar),
@@ -57,21 +58,23 @@ impl Skeleton {
         }
     }
 
-    pub fn vertex_header_element(&self) -> ElementDef {
+    pub(super) fn vertex_header_element(&self) -> ElementDef {
         let mut vertex_element = ElementDef::new("vertex".to_string());
-        for (&key, &prop) in self.vertex_property_types.iter() {
-            vertex_element.properties.add(PropertyDef::new(key, prop));
+        for (key, prop) in self.vertex_property_types.iter() {
+            vertex_element
+                .properties
+                .add(PropertyDef::new(key.clone(), prop.clone()));
         }
         vertex_element
     }
 
-    pub fn vertex_payload_element(&self) -> Vec<DefaultElement> {
+    pub(super) fn vertex_payload_element(&self) -> Vec<DefaultElement> {
         let mut vertices = Vec::new();
 
         for i in 0..self.vertex_coords.len() {
             let mut vertex = DefaultElement::new();
-            for (&key, &val) in self.vertex_properties[i].iter() {
-                vertex.insert(key, val);
+            for (key, val) in self.vertex_properties[i].iter() {
+                vertex.insert(key.clone(), val.clone());
             }
             vertex.insert("x".to_string(), Property::Float(self.vertex_coords[i][0]));
             vertex.insert("y".to_string(), Property::Float(self.vertex_coords[i][1]));
@@ -83,21 +86,23 @@ impl Skeleton {
         vertices
     }
 
-    pub fn face_header_element(&self) -> ElementDef {
+    pub(super) fn face_header_element(&self) -> ElementDef {
         let mut face_element = ElementDef::new("face".to_string());
-        for (&key, &prop) in self.face_property_types.iter() {
-            face_element.properties.add(PropertyDef::new(key, prop));
+        for (key, prop) in self.face_property_types.iter() {
+            face_element
+                .properties
+                .add(PropertyDef::new(key.clone(), prop.clone()));
         }
         face_element
     }
 
-    pub fn face_payload_element(&self) -> Vec<DefaultElement> {
+    pub(super) fn face_payload_element(&self) -> Vec<DefaultElement> {
         let mut faces = Vec::new();
 
         for i in 0..self.face_edges.len() {
             let mut face = DefaultElement::new();
-            for (&key, &val) in self.faces_properties[i].iter() {
-                face.insert(key, val);
+            for (key, val) in self.faces_properties[i].iter() {
+                face.insert(key.clone(), val.clone());
             }
             face.insert(
                 "vertex_indices".to_string(),
@@ -122,7 +127,7 @@ impl Skeleton {
     ) -> usize {
         self.vertex_coords.push(position);
         self.vertex_radius.push(radius);
-        self.vertex_properties.push(properties);
+        self.vertex_properties.push(properties.clone());
         self.vertex_property_types
             .insert("x".to_string(), PropertyType::Scalar(ScalarType::Float));
         self.vertex_property_types
@@ -134,8 +139,8 @@ impl Skeleton {
             PropertyType::Scalar(ScalarType::Float),
         );
         for (key, prop) in properties {
-            let ptype = property_to_propertytype(prop);
-            self.vertex_property_types.insert(key, ptype);
+            let ptype = property_to_propertytype(&prop);
+            self.vertex_property_types.insert(key.clone(), ptype);
         }
 
         self.vertex_coords.len() - 1
@@ -181,15 +186,13 @@ impl Skeleton {
             edge_indices.push(ei);
         }
         self.face_vertices.push(vertex_indices);
-        self.face_edges.push(edge_indices);
-        self.faces_properties.push(properties);
         self.face_property_types.insert(
             "vertex_indices".to_string(),
             PropertyType::List(ScalarType::UChar, ScalarType::UInt),
         );
-        for (key, prop) in properties {
-            let ptype = property_to_propertytype(prop);
-            self.face_property_types.insert(key, ptype);
+        for (key, prop) in properties.iter() {
+            let ptype = property_to_propertytype(&prop);
+            self.face_property_types.insert(key.clone(), ptype);
         }
 
         for edge_index in &edge_indices {
@@ -198,6 +201,80 @@ impl Skeleton {
                 .or_insert(Vec::new())
                 .push(self.face_edges.len() - 1);
         }
+        self.face_edges.push(edge_indices);
+        self.faces_properties.push(properties);
+    }
+
+    pub fn set_property_f32(&mut self, prop_name: &str, prop_value: &Vec<f32>) -> Result<()> {
+        if prop_value.len() != self.vertex_properties.len() {
+            Err(anyhow::Error::msg(
+                "Number of vertices and properties does not match",
+            ))
+        } else {
+            self.vertex_property_types.insert(
+                prop_name.to_string(),
+                PropertyType::Scalar(ScalarType::Float),
+            );
+            for i in 0..self.vertex_properties.len() {
+                self.vertex_properties[i]
+                    .insert(prop_name.to_string(), Property::Float(prop_value[i]));
+            }
+            Ok(())
+        }
+    }
+
+    pub fn set_vertex_color_from_property_f32(&mut self, prop_name: &str) -> Result<()> {
+        if !self.vertex_property_types.contains_key(prop_name) {
+            return Err(anyhow::Error::msg("Property does not exist"));
+        }
+        if *self.vertex_property_types.get(prop_name).unwrap()
+            != PropertyType::Scalar(ScalarType::Float)
+        {
+            return Err(anyhow::Error::msg("Property is not a float"));
+        }
+        let (min_p, max_p) = self
+            .vertex_properties
+            .iter()
+            .fold(None, |val, vert_prop| {
+                let v_cur = vert_prop.get(prop_name).unwrap();
+                let v_cur = if let Property::Float(v) = v_cur {
+                    *v
+                } else {
+                    panic!()
+                };
+                if let Some((v_min, v_max)) = val {
+                    let v_min = if v_min < v_cur { v_min } else { v_cur };
+                    let v_max = if v_max > v_cur { v_max } else { v_cur };
+                    Some((v_min, v_max))
+                } else {
+                    Some((v_cur, v_cur))
+                }
+            })
+            .unwrap();
+
+        self.vertex_property_types
+            .insert("red".to_string(), PropertyType::Scalar(ScalarType::UChar));
+        self.vertex_property_types
+            .insert("green".to_string(), PropertyType::Scalar(ScalarType::UChar));
+        self.vertex_property_types
+            .insert("blue".to_string(), PropertyType::Scalar(ScalarType::UChar));
+        for prop in self.vertex_properties.iter_mut() {
+            let p_cur = prop.get(prop_name).unwrap();
+            let p_cur = if let Property::Float(p) = p_cur {
+                p
+            } else {
+                panic!()
+            };
+            let factor = (p_cur - min_p) / (max_p - min_p);
+            let r = (255.0 * factor) as u8;
+            let g = 0 as u8;
+            let b = (255.0 * (1.0 - factor)) as u8;
+            prop.insert("red".to_string(), Property::UChar(r));
+            prop.insert("green".to_string(), Property::UChar(g));
+            prop.insert("blue".to_string(), Property::UChar(b));
+        }
+
+        Ok(())
     }
 
     pub fn get_vertices(&self) -> &Vec<Vector3<f32>> {

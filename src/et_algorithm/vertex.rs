@@ -5,6 +5,12 @@ use nalgebra::base::*;
 use super::burntime::BurnTime;
 use super::sector::Sector;
 
+#[derive(Clone, Copy)]
+pub enum ErosionThickness {
+    Infinity,
+    ET(f32),
+}
+
 #[derive(Clone)]
 pub struct Vertex {
     pos: Vector3<f32>,
@@ -47,6 +53,13 @@ impl Vertex {
 
     pub fn time(&self) -> &BurnTime {
         &self.time
+    }
+
+    pub fn erosion_thickness(&self) -> ErosionThickness {
+        match self.time {
+            BurnTime::Infinity => ErosionThickness::Infinity,
+            BurnTime::Time(t) => ErosionThickness::ET(t - self.rad),
+        }
     }
 
     pub fn burn(&mut self) -> () {

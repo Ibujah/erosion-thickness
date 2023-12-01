@@ -1,10 +1,15 @@
+use anyhow::Result;
 use log;
 use std::{cmp::Ordering, collections::HashSet};
 
-use super::{burntime::BurnTime, graph::ETGraph};
+use super::{burntime::BurnTime, graph::ETGraph, vertex::ErosionThickness};
 use crate::skeleton::skeleton::Skeleton;
 
-pub fn erosion_thickness_computation(skeleton: &Skeleton, dist_max: f32, subdiv_max: usize) {
+pub fn erosion_thickness_computation(
+    skeleton: &mut Skeleton,
+    dist_max: f32,
+    subdiv_max: usize,
+) -> Result<()> {
     let mut et_graph = ETGraph::new(skeleton, dist_max, subdiv_max);
 
     let mut q = HashSet::new();
@@ -113,4 +118,29 @@ pub fn erosion_thickness_computation(skeleton: &Skeleton, dist_max: f32, subdiv_
             }
         }
     }
+
+    let mut et_max = 0.0;
+    for i in 0..skeleton.get_vertices().len() {
+        let et = et_graph.get_vertices()[i].erosion_thickness();
+        if let ErosionThickness::ET(et) = et {
+            if et > et_max {
+                et_max = et;
+            }
+        }
+    }
+
+    let mut et_values: Vec<f32> = Vec::new();
+    for i in 0..skeleton.get_vertices().len() {
+        let et = et_graph.get_vertices()[i].erosion_thickness();
+        if let ErosionThickness::ET(et) = et {
+            et_values.push(et);
+        } else {
+            et_values.push(et_max);
+        }
+    }
+
+    skeleton.set_property_f32("erosion_thickness", &et_values)?;
+    skeleton.set_vertex_color_from_property_f32("erosion_thickness")?;
+
+    Ok(())
 }
