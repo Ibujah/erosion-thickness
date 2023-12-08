@@ -111,10 +111,6 @@ impl Vertex {
         &mut self.sector
     }
 
-    pub fn get_sectors(&self) -> &Vec<Sector> {
-        &self.sector
-    }
-
     pub fn neigh(&self) -> &Vec<usize> {
         &self.neigh
     }
